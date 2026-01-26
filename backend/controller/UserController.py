@@ -12,6 +12,29 @@ from env_config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
 
 
 class UserController:
+        
+    @staticmethod
+    def change_password(user_id):
+        try:
+            data = request.get_json()
+            old_password = data.get('old_password')
+            new_password = data.get('new_password')
+            if not all([old_password, new_password]):
+                return jsonify({'message': 'יש למלא את כל השדות'}), 400
+            user = Users.get_user_by_id(user_id)
+            if not user:
+                return jsonify({'message': 'משתמש לא נמצא'}), 404
+            # user[4] = hashed password
+            if not check_password_hash(user[4], old_password):
+                return jsonify({'message': 'הסיסמה הנוכחית שגויה'}), 401
+            hashed_new_password = generate_password_hash(new_password)
+            updated = Users.update_password(user_id, hashed_new_password)
+            if updated:
+                return jsonify({'message': 'הסיסמה עודכנה בהצלחה'}), 200
+            else:
+                return jsonify({'message': 'שגיאה בעדכון הסיסמה'}), 500
+        except mysql.connector.Error as err:
+            return jsonify({'error': str(err)}), 500
 
     @staticmethod
     def create_jwt_token(user_data):
@@ -59,11 +82,12 @@ class UserController:
             last_name = data.get('last_name')
             email = data.get('email')
             password = data.get('password')
+            profile_image_url = data.get('profile_image_url')
             if not all([first_name, last_name, email, password]):
                 return jsonify({'message': 'כל השדות חובה'}), 400
             if len(password) < 4:
                 return jsonify({'message': 'הסיסמה חייבת להיות לפחות 4 תווים'}), 400
-            result = Users.create_user(first_name, last_name, email, password)
+            result = Users.create_user(first_name, last_name, email, password, profile_image_url)
             if result is None:
                 return jsonify({'message': 'המשתמש קיים כבר'}), 409
             return jsonify(result), 201
@@ -98,10 +122,9 @@ class UserController:
             first_name = data.get('first_name')
             last_name = data.get('last_name')
             email = data.get('email')
-            password = data.get('password')
-            if not all([first_name, last_name, email, password]):
+            if not all([first_name, last_name, email]):
                 return jsonify({'message': 'כל השדות חובה'}), 400
-            rows_affected = Users.update_user(user_id, first_name, last_name, email, password)
+            rows_affected = Users.update_user(user_id, first_name, last_name, email)
             if rows_affected:
                 return jsonify({'user_id': user_id, 'first_name': first_name, 'last_name': last_name, 'email': email}), 200
             else:
@@ -165,6 +188,35 @@ class UserController:
             print(f"Error updating password: {err}")
             return False
 
+
+    @staticmethod
+    def upload_profile_image(user_id):
+        import os
+        try:
+            if 'image' not in request.files:
+                return jsonify({'message': 'לא נשלחה תמונה'}), 400
+            file = request.files['image']
+            if file.filename == '':
+                return jsonify({'message': 'לא נבחרה תמונה'}), 400
+
+            # שמור את הקובץ
+            filename = f"user_{user_id}_{file.filename}"
+            save_dir = os.path.join('backend', 'profile_images')
+            os.makedirs(save_dir, exist_ok=True)
+            save_path = os.path.join(save_dir, filename)
+            file.save(save_path)
+
+            # עדכן את כתובת התמונה במסד הנתונים
+            profile_image_url = f"profile_images/{filename}"
+            rows_affected = Users.update_profile_image(user_id, profile_image_url)
+            if rows_affected:
+                return jsonify({'message': 'תמונת הפרופיל עודכנה בהצלחה', 'profile_image_url': profile_image_url}), 200
+            else:
+                return jsonify({'message': 'משתמש לא נמצא'}), 404
+        except Exception as err:
+            return jsonify({'error': str(err)}), 500
+
+
     @staticmethod
     def get_user_by_email(email):
         try:
@@ -227,3 +279,27 @@ class UserController:
             return jsonify({'message': 'הסיסמה אופסה בהצלחה'}), 200
         else:
             return jsonify({'message': 'שגיאה בעדכון הסיסמה'}), 500
+
+    @staticmethod
+    def upload_profile_image(user_id):
+            try:
+                if 'profile_image' not in request.files:
+                    return jsonify({'message': 'אין קובץ תמונה'}), 400
+                file = request.files['profile_image']
+                if file.filename == '':
+                    return jsonify({'message': 'לא נבחר קובץ'}), 400
+                # שמירת הקובץ בשרת (לצורך הפשטות נשמור בתיקייה מקומית)
+                upload_folder = 'static/profile_images'
+                if not os.path.exists(upload_folder):
+                    os.makedirs(upload_folder)
+                file_path = os.path.join(upload_folder, f'user_{user_id}_{file.filename}')
+                file.save(file_path)
+                # עדכון כתובת התמונה בבסיס הנתונים
+                profile_image_url = f'/{file_path}'
+                rows_affected = Users.update_profile_image(user_id, profile_image_url)
+                if rows_affected:
+                    return jsonify({'message': 'תמונת הפרופיל הועלתה בהצלחה', 'profile_image_url': profile_image_url}), 200
+                else:
+                    return jsonify({'message': 'משתמש לא נמצא'}), 404
+            except mysql.connector.Error as err:
+                return jsonify({'error': str(err)}), 500

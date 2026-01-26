@@ -138,3 +138,62 @@ export const checkToken = async () => {
     });
     return response.ok;
 };
+
+// שינוי סיסמה למשתמש מחובר
+export const changePassword = async (userId: number, old_password: string, new_password: string) => {
+    const token = getToken();
+    const response = await fetch(`${API_URL}/users/${userId}/change-password`, {
+        method: 'PUT',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ old_password, new_password }),
+    });
+    let data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to change password');
+    }
+    return data;
+};
+
+// העלאת תמונת פרופיל
+export const uploadProfileImage = async (userId: number, file: File) => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('image', file);
+    console.log('Uploading file:', file);
+    // שים לב: העלאת תמונה צריכה להיות POST ל-upload-profile-image
+    const response = await fetch(`${API_URL}/users/${userId}/upload-profile-image`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`
+            // אל תוסיף Content-Type כאן!
+        },
+        body: formData
+    });
+    let data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to upload image');
+    }
+    return data;
+};
+
+export const updateProfileImage = async (userId: number, file: File) => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await fetch(`${API_URL}/users/${userId}/update-profile-image`, {
+        method: 'PUT',
+        headers: {
+            'Authorization': `Bearer ${token}`
+            // אל תוסיף Content-Type כאן!
+        },
+        body: formData
+    });
+    let data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to update profile image');
+    }
+    return data;
+};

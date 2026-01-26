@@ -250,6 +250,8 @@ export default function Overview() {
                             <div style={{display: 'flex', justifyContent: 'center', gap: 48, marginTop: 8}}>
                                 <span style={{color: '#3778ff', fontWeight: 700}}>סה"כ הכנסות: {totalIncome.toLocaleString()} ₪</span>
                                 <span style={{color: '#ff3c3c', fontWeight: 700}}>סה"כ הוצאות: {totalExpenses.toLocaleString()} ₪</span>
+                                <br />
+                                <span style={{color: '#7b2ff7', fontWeight: 700}}>יתרה: {(totalIncome - totalExpenses).toLocaleString()} ₪</span>
                             </div>
                         </div>
                     </>;

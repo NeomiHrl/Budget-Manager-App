@@ -4,8 +4,18 @@ import os
 from werkzeug.security import generate_password_hash
 
 
+@staticmethod
+def alter_add_profile_image_column():
+    with Users.get_db_connection() as connection:
+        cursor = connection.cursor()
+        sql = "ALTER TABLE users ADD COLUMN profile_image_url VARCHAR(255) DEFAULT NULL;"
+        cursor.execute(sql)
+        connection.commit()
+        cursor.close()
 
+        
 class Users:
+       
     @staticmethod
     def reset_all_passwords_to_default(default_password="1234"):
         from werkzeug.security import generate_password_hash
@@ -60,16 +70,37 @@ class Users:
             is_exist = cursor.fetchone()
             if is_exist:
                 return None
-            query = "INSERT INTO users (first_name, last_name, email, password, role_id) VALUES (%s, %s, %s, %s, %s)"
-            cursor.execute(query, (first_name, last_name, email, hashed_password, 2))  # Default role_id = 2
+            query = "INSERT INTO users (first_name, last_name, email, password, role_id, profile_image_url) VALUES (%s, %s, %s, %s, %s, %s)"
+            cursor.execute(query, (first_name, last_name, email, hashed_password, 2, None))  # Default role_id = 2
             connection.commit()
             cursor.close()
             return {
                 "user_id": cursor.lastrowid,
                 "first_name": first_name,
                 "last_name": last_name,
-                "email": email
+                "email": email,
+                "profile_image_url": profile_image_url
             }
+        @staticmethod
+        def create_user(first_name, last_name, email, password, profile_image_url=None):
+            hashed_password = generate_password_hash(password)
+            with Users.get_db_connection() as connection:
+                cursor = connection.cursor()
+                cursor.execute('SELECT * FROM users WHERE email=%s', (email,))
+                is_exist = cursor.fetchone()
+                if is_exist:
+                    return None
+                query = "INSERT INTO users (first_name, last_name, email, password, role_id, profile_image_url) VALUES (%s, %s, %s, %s, %s, %s)"
+                cursor.execute(query, (first_name, last_name, email, hashed_password, 2, profile_image_url))  # Default role_id = 2
+                connection.commit()
+                cursor.close()
+                return {
+                    "user_id": cursor.lastrowid,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": email,
+                    "profile_image_url": profile_image_url
+                }
 
 
 
@@ -92,13 +123,25 @@ class Users:
             return user
 
     @staticmethod
-    def update_user(user_id, first_name, last_name, email, password):   
+    def update_user(user_id, first_name, last_name, email):
         with Users.get_db_connection() as connection:
             cursor = connection.cursor()
-            query = "UPDATE users SET first_name = %s, last_name = %s, email = %s, password = %s WHERE user_id = %s"
-            cursor.execute(query, (first_name, last_name, email, password, user_id))
+            query = "UPDATE users SET first_name = %s, last_name = %s, email = %s WHERE user_id = %s"
+            cursor.execute(query, (first_name, last_name, email, user_id))
             connection.commit()
+            rows_affected = cursor.rowcount
             cursor.close()
+            return rows_affected
+        @staticmethod
+        def update_user(user_id, first_name, last_name, email, profile_image_url=None):
+            with Users.get_db_connection() as connection:
+                cursor = connection.cursor()
+                query = "UPDATE users SET first_name = %s, last_name = %s, email = %s, profile_image_url = %s WHERE user_id = %s"
+                cursor.execute(query, (first_name, last_name, email, profile_image_url, user_id))
+                connection.commit()
+                rows_affected = cursor.rowcount
+                cursor.close()
+                return rows_affected
 
     @staticmethod
     def delete_user(user_id):
@@ -139,3 +182,14 @@ class Users:
             updated_rows = cursor.rowcount
             cursor.close()
             return updated_rows
+
+    @staticmethod
+    def update_profile_image(user_id, profile_image_url):
+            with Users.get_db_connection() as connection:
+                cursor = connection.cursor()
+                query = "UPDATE users SET profile_image_url = %s WHERE user_id = %s"
+                cursor.execute(query, (profile_image_url, user_id))
+                connection.commit()
+                rows_affected = cursor.rowcount
+                cursor.close()
+                return rows_affected

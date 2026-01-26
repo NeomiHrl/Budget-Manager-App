@@ -46,7 +46,7 @@ class ExpenseSources:
     def get_all_expense_sources():
         with ExpenseSources.get_db_connection() as connection:
             cursor = connection.cursor()
-            query = "SELECT * FROM expense_sources"
+            query = "SELECT * FROM expense_sources ORDER BY (expense_source_name = 'שונות'), expense_source_name"
             cursor.execute(query)
             expenses = cursor.fetchall()
             cursor.close()

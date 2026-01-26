@@ -157,3 +157,6 @@ export const UserProvider=({children}:any)=>{
 }   
 
 export default UserContext;
+// עדכון גם בפרופיל:
+// אחרי כל setUser(updated) בפרופיל, להוסיף:
+// localStorage.setItem("user", JSON.stringify(updated));
