@@ -1,14 +1,36 @@
-import React, { useState } from 'react';
-import { changePassword, updateUser, uploadProfileImage,updateProfileImage } from '../Api/ApiUser';
+import React, { useState, useEffect } from 'react';
+import { changePassword, updateUser, uploadProfileImage, getUserById,getProfileImageUrl } from '../Api/ApiUser';
 import { useUser } from '../Contexts/UserContext';
 import { FaUserCircle, FaEnvelope, FaEdit, FaSave, FaBell } from 'react-icons/fa';
+import { useRef } from 'react';
 
 export default function Profile() {
   const { user, setUser } = useUser();
-  const [firstName, setFirstName] = useState(user?.first_name || '');
-  const [lastName, setLastName] = useState(user?.last_name || '');
-  const [email, setEmail] = useState(user?.email || '');
-  const [profileImage, setProfileImage] = useState(user?.profile_image_url || '');
+    const [firstName, setFirstName] = useState(user?.first_name || '');
+    const [lastName, setLastName] = useState(user?.last_name || '');
+    const [email, setEmail] = useState(user?.email || '');
+    const [profileImage, setProfileImage] = useState(user?.profile_image_url || '');
+    const [imageVersion, setImageVersion] = useState(Date.now());
+
+    // טען נתוני משתמש עדכניים מהשרת בכל כניסה לדף
+    useEffect(() => {
+      const fetchUser = async () => {
+        if (user && user.user_id) {
+          try {
+            const freshUser = await getUserById(user.user_id);
+            setUser && setUser(freshUser);
+            setFirstName(freshUser.first_name || '');
+            setLastName(freshUser.last_name || '');
+            setEmail(freshUser.email || '');
+            setProfileImage(freshUser.profile_image_url || '');
+          } catch (err) {
+            // אפשר להוסיף טיפול בשגיאה כאן
+          }
+        }
+      };
+      fetchUser();
+      // eslint-disable-next-line
+    }, []);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -18,27 +40,21 @@ export default function Profile() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelMsg, setCancelMsg] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isHovering, setIsHovering] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
 
-  // העלאת תמונה
+
+  // העלאת תמונה (תמיד משתמשים ב-uploadProfileImage)
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     setUploadError(null);
     setUploading(true);
     try {
-      const file = e.target.files[0];
-      let res;
-      if (!user.profile_image_url) {
-        // First time upload
-        res = await uploadProfileImage(user.user_id, file);
-        setMessage('תמונת הפרופיל הועלתה בהצלחה!');
-      } else {
-        // Update existing image
-        // You may want to upload the new file and then update the URL
-        // Here, we assume the backend expects the new file in updateProfileImage
-        res = await updateProfileImage(user.user_id, file);
-        setMessage('תמונת הפרופיל עודכנה בהצלחה!');
-      }
+      const res = await uploadProfileImage(user.user_id, fileInputRef.current!.files![0]);
+      setMessage(user.profile_image_url ? 'תמונת הפרופיל עודכנה בהצלחה!' : 'תמונת הפרופיל הועלתה בהצלחה!');
       setProfileImage(res.profile_image_url);
+      setImageVersion(Date.now());
       setUser && setUser({ ...user, profile_image_url: res.profile_image_url });
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
@@ -111,15 +127,99 @@ export default function Profile() {
     <div style={{maxWidth: 520, margin: '40px auto', background: '#fff', borderRadius: 18, boxShadow: '0 2px 16px #e9e3f7', padding: 32, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'}}>
       {/* תמונת פרופיל */}
       <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 18, width: '100%'}}>
-        {profileImage ? (
-          <img src={`http://localhost:5000/${profileImage}`} alt="profile" style={{width: 84, height: 84, borderRadius: '50%', objectFit: 'cover', marginBottom: 8, border: '2px solid #7b2ff7'}} />
-        ) : (
-          <FaUserCircle size={84} color="#7b2ff7" style={{marginBottom: 8}} />
+        <div
+          style={{position: 'relative', width: 84, height: 84, marginBottom: 8}}
+          onMouseEnter={() => setIsHovering(true)}
+          onMouseLeave={() => setIsHovering(false)}
+        >
+          {profileImage ? (
+            <img
+              src={getProfileImageUrl(profileImage) + `?v=${imageVersion}`}
+              alt="profile"
+              style={{width: 84, height: 84, borderRadius: '50%', objectFit: 'cover', border: '2px solid #7b2ff7', cursor: 'pointer'}}
+              onClick={() => setShowImageModal(true)}
+            />
+          ) : (
+            <FaUserCircle size={84} color="#7b2ff7" style={{cursor: 'pointer'}} onClick={() => setShowImageModal(true)} />
+          )}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current && fileInputRef.current.click()}
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              right: 0,
+              background: isHovering ? '#f357a8' : '#fff',
+              color: isHovering ? '#fff' : '#7b2ff7',
+              border: '2px solid #7b2ff7',
+              borderRadius: '50%',
+              width: 32,
+              height: 32,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px #e9e3f7',
+              transition: 'background 0.2s, color 0.2s',
+            }}
+            title={user.profile_image_url ? 'החלף תמונה' : 'העלה תמונה'}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 17C14.7614 17 17 14.7614 17 12C17 9.23858 14.7614 7 12 7C9.23858 7 7 9.23858 7 12C7 14.7614 9.23858 17 12 17Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M19 21V19C19 17.8954 18.1046 17 17 17H7C5.89543 17 5 17.8954 5 19V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          <input
+            type="file"
+            accept="image/*"
+            style={{display: 'none'}}
+            ref={fileInputRef}
+            onChange={handleImageChange}
+            disabled={uploading}
+          />
+              {/* מודאל תמונה מוגדלת */}
+              {showImageModal && (
+                <div style={{position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center'}} onClick={() => setShowImageModal(false)}>
+                  <div style={{position: 'relative', background: '#fff', borderRadius: 18, padding: 24, boxShadow: '0 2px 16px #e9e3f7', display: 'flex', flexDirection: 'column', alignItems: 'center'}} onClick={e => e.stopPropagation()}>
+                    <img
+                      src={getProfileImageUrl(profileImage) + `?v=${imageVersion}`}
+                      alt="profile-large"
+                      style={{width: 260, height: 260, borderRadius: '50%', objectFit: 'cover', border: '3px solid #7b2ff7', marginBottom: 18}}
+                    />
+                    <FaEdit
+                      onClick={() => { setShowImageModal(false); fileInputRef.current && fileInputRef.current.click(); }}
+                      style={{
+                        position: 'absolute',
+                        bottom: 36,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        background: '#fff',
+                        color: '#7b2ff7',
+                        border: '2px solid #7b2ff7',
+                        borderRadius: '50%',
+                        width: 48,
+                        height: 48,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 8px #e9e3f7',
+                        fontSize: 28,
+                        padding: 10
+                      }}
+                      title="החלף תמונה"
+                    />
+                  
+                  </div>
+                </div>
+              )}
+        </div>
+        {isHovering && (
+          <div style={{color: '#7b2ff7', fontWeight: 700, fontSize: 14, marginBottom: 4}}>
+            {user.profile_image_url ? 'החלף תמונת פרופיל' : 'העלה תמונת פרופיל'}
+          </div>
         )}
-        <label style={{marginBottom: 10, color: '#7b2ff7', fontWeight: 700, cursor: 'pointer'}}>
-          <input type="file" accept="image/*" style={{display: 'none'}} onChange={handleImageChange} disabled={uploading} />
-          {uploading ? 'מעלה תמונה...' : 'העלה/י תמונת פרופיל'}
-        </label>
+        {uploading && <div style={{color: '#7b2ff7', fontWeight: 700, fontSize: 15, marginBottom: 8}}>מעלה תמונה...</div>}
         {uploadError && <div style={{color: '#c00', fontWeight: 700, fontSize: 15, marginBottom: 8}}>{uploadError}</div>}
         <div style={{fontSize: 26, fontWeight: 800, color: '#7b2ff7'}}>
           {firstName} {lastName}

@@ -41,14 +41,11 @@ export const UserProvider=({children}:any)=>{
                         console.log('✅ Context: User restored successfully'); // ← DEBUG
                     } else {
                         console.log('❌ Context: Token invalid, clearing storage'); // ← DEBUG
-                        localStorage.removeItem("token");
-                        localStorage.removeItem("user");
-                        setToken(null);
+                        logout();
                     }
                 } catch (error) {
                     console.error("❌ Context: Error parsing user data:", error); // ← DEBUG
-                    localStorage.removeItem("user");
-                    localStorage.removeItem("token");
+                    logout();
                     setToken(null);
                 }
             } else {
@@ -117,6 +114,7 @@ export const UserProvider=({children}:any)=>{
     const logout=()=>{
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        localStorage.removeItem('welcomeShown');
         setUser(null);
         setIsAuthenticated(false);
         setToken(null);

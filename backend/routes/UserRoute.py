@@ -1,3 +1,4 @@
+from flask import send_from_directory
 import os
 from flask import Blueprint, request, jsonify
 from controller.UserController import UserController
@@ -54,12 +55,9 @@ def check_token():
 def change_password(user_id):
     return UserController.change_password(user_id)
 
-@user_bp.route('/users/<int:user_id>/update-profile-image', methods=['PUT'])
-@require_auth
-def update_profile_image(user_id):
-    return UserController.update_profile_image(user_id)
+from flask_cors import cross_origin
 
 @user_bp.route('/users/<int:user_id>/upload-profile-image', methods=['POST'])
-@require_auth
 def upload_profile_image(user_id):
     return UserController.upload_profile_image(user_id)
+

@@ -161,39 +161,19 @@ export const changePassword = async (userId: number, old_password: string, new_p
 export const uploadProfileImage = async (userId: number, file: File) => {
     const token = getToken();
     const formData = new FormData();
-    formData.append('image', file);
+    formData.append('profile_image', file);
     console.log('Uploading file:', file);
-    // שים לב: העלאת תמונה צריכה להיות POST ל-upload-profile-image
     const response = await fetch(`${API_URL}/users/${userId}/upload-profile-image`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${token}`
-            // אל תוסיף Content-Type כאן!
         },
         body: formData
     });
-    let data = await response.json();
-    if (!response.ok) {
-        throw new Error(data.message || 'Failed to upload image');
-    }
-    return data;
-};
+    if (!response.ok) throw new Error('Failed to upload image');
+    return await response.json();
+   }
 
-export const updateProfileImage = async (userId: number, file: File) => {
-    const token = getToken();
-    const formData = new FormData();
-    formData.append('image', file);
-    const response = await fetch(`${API_URL}/users/${userId}/update-profile-image`, {
-        method: 'PUT',
-        headers: {
-            'Authorization': `Bearer ${token}`
-            // אל תוסיף Content-Type כאן!
-        },
-        body: formData
-    });
-    let data = await response.json();
-    if (!response.ok) {
-        throw new Error(data.message || 'Failed to update profile image');
-    }
-    return data;
-};
+
+export const getProfileImageUrl = (imageName: string) =>
+    imageName ? `http://localhost:5000/profile_images_uploads/${imageName.replace(/^.*(user_\d+\.[a-zA-Z0-9]+)$/, '$1')}` : "";

@@ -1,5 +1,5 @@
-
 from models.UserModel import Users
+import os
 from flask import jsonify, request
 import re
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -9,6 +9,7 @@ import mysql.connector
 import smtplib
 from email.mime.text import MIMEText
 from env_config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
+from werkzeug.utils import secure_filename
 
 
 class UserController:
@@ -108,7 +109,20 @@ class UserController:
         try:
             user = Users.get_user_by_id(user_id)
             if user:
-                user_data = {'user_id': user[0], 'first_name': user[1], 'last_name': user[2], 'email': user[3]}
+                # נבנה URL מלא לתמונה אם יש
+                profile_image_url = None
+                if len(user) > 6 and user[6]:
+                    filename = os.path.basename(user[6])
+                    if Users.profile_image_exists(filename):
+                        # מחזיר URL תואם לסטטיק
+                        profile_image_url = f'profile_images_uploads/{filename}'
+                user_data = {
+                    'user_id': user[0],
+                    'first_name': user[1],
+                    'last_name': user[2],
+                    'email': user[3],
+                    'profile_image_url': profile_image_url
+                }
                 return jsonify(user_data), 200
             else:
                 return jsonify({'message': 'משתמש לא נמצא'}), 404
@@ -189,31 +203,69 @@ class UserController:
             return False
 
 
+
     @staticmethod
     def upload_profile_image(user_id):
         import os
         try:
-            if 'image' not in request.files:
-                return jsonify({'message': 'לא נשלחה תמונה'}), 400
-            file = request.files['image']
+            print(f"[DEBUG] התחלת upload_profile_image עבור user_id={user_id}")
+            if 'profile_image' not in request.files:
+                print("[ERROR] אין קובץ profile_image ב-request.files")
+                return jsonify({'message': 'אין קובץ תמונה'}), 400
+            file = request.files['profile_image']
             if file.filename == '':
-                return jsonify({'message': 'לא נבחרה תמונה'}), 400
+                print("[ERROR] לא נבחר קובץ (filename ריק)")
+                return jsonify({'message': 'לא נבחר קובץ'}), 400
 
-            # שמור את הקובץ
-            filename = f"user_{user_id}_{file.filename}"
-            save_dir = os.path.join('backend', 'profile_images')
-            os.makedirs(save_dir, exist_ok=True)
-            save_path = os.path.join(save_dir, filename)
-            file.save(save_path)
+            filename = secure_filename(file.filename)
+            print(f"[DEBUG] קובץ התקבל: {filename}")
+
+            # הגדר תיקיית התמונות
+            project_root = os.path.dirname(os.path.dirname(__file__)) 
+            upload_folder = os.path.join(project_root, 'profile_images_uploads')
+            os.makedirs(upload_folder, exist_ok=True)
+            print(f"[DEBUG] תיקיית העלאה: {upload_folder}")
+
+            # שם קובץ ייחודי לפי user_id
+            allowed_ext = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+            _, ext = os.path.splitext(file.filename)
+            filename = f'user_{user_id}{ext.lower()}'
+            file_path = os.path.join(upload_folder, filename)
+            print(f"[DEBUG] נתיב לשמירה: {file_path}")
+
+            # מחיקת תמונה ישנה אם קיימת
+            user = Users.get_user_by_id(user_id)
+            print(f"[DEBUG] user={user}")
+            if user:
+                old_image_url = user[6] if len(user) > 6 else None  # הנח שעמודה 6 היא profile_image_url
+                print(f"[DEBUG] old_image_url={old_image_url}")
+                if old_image_url:
+                    old_image_path = os.path.join(project_root, old_image_url.lstrip('/'))
+                    print(f"[DEBUG] old_image_path={old_image_path}")
+                    if os.path.exists(old_image_path):
+                        try:
+                            os.remove(old_image_path)
+                            print(f"[DEBUG] תמונה ישנה נמחקה: {old_image_path}")
+                        except Exception as e:
+                            print(f"[ERROR] שגיאה במחיקת תמונה ישנה: {e}")
+
+            # שמור את הקובץ החדש
+            print(f"[DEBUG] שמירת קובץ חדש: {file_path}")
+            file.save(file_path)
 
             # עדכן את כתובת התמונה במסד הנתונים
-            profile_image_url = f"profile_images/{filename}"
+            profile_image_url = f'profile_images_uploads/{filename}'
+            print(f"[DEBUG] עדכון profile_image_url במסד: {profile_image_url}")
             rows_affected = Users.update_profile_image(user_id, profile_image_url)
+            print(f"[DEBUG] user_id: {user_id}, rows_affected: {rows_affected}, profile_image_url: {profile_image_url}")
             if rows_affected:
-                return jsonify({'message': 'תמונת הפרופיל עודכנה בהצלחה', 'profile_image_url': profile_image_url}), 200
+                print(f"[SUCCESS] תמונת הפרופיל הועלתה בהצלחה")
+                return jsonify({'message': 'תמונת הפרופיל הועלתה בהצלחה', 'profile_image_url': profile_image_url}), 200
             else:
-                return jsonify({'message': 'משתמש לא נמצא'}), 404
+                print(f"[ERROR] משתמש לא נמצא (user_id={user_id})")
+                return jsonify({'message': f'משתמש לא נמצא (user_id={user_id})'}), 404
         except Exception as err:
+            print(f"[FATAL ERROR] {err}")
             return jsonify({'error': str(err)}), 500
 
 
@@ -282,24 +334,50 @@ class UserController:
 
     @staticmethod
     def upload_profile_image(user_id):
+        import os
+        try:
+            if 'profile_image' not in request.files:
+                return jsonify({'message': 'אין קובץ תמונה'}), 400
+            file = request.files['profile_image']
+            if file.filename == '':
+                return jsonify({'message': 'לא נבחר קובץ'}), 400
+
+            # הגדר תיקיית התמונות
+            project_root = os.path.dirname(os.path.dirname(__file__)) 
+            upload_folder = os.path.join(project_root, 'profile_images_uploads')
+            os.makedirs(upload_folder, exist_ok=True)
+
+            # שם קובץ ייחודי לפי user_id
+            _, ext = os.path.splitext(file.filename)
+            filename = f'user_{user_id}{ext.lower()}'
+            file_path = os.path.join(upload_folder, filename)
+
+            # מחיקת תמונה ישנה אם קיימת
+            user = Users.get_user_by_id(user_id)
+            if user:
+                old_image_url = user[6] if len(user) > 6 else None  # הנח שעמודה 6 היא profile_image_url
+                if old_image_url:
+                    old_image_path = os.path.join(project_root, old_image_url.lstrip('/'))
+                    if os.path.exists(old_image_path):
+                        try:
+                            os.remove(old_image_path)
+                        except Exception as e:
+                            print(f"[ERROR] שגיאה במחיקת תמונה ישנה: {e}")
+
+            # שמור את הקובץ החדש
             try:
-                if 'profile_image' not in request.files:
-                    return jsonify({'message': 'אין קובץ תמונה'}), 400
-                file = request.files['profile_image']
-                if file.filename == '':
-                    return jsonify({'message': 'לא נבחר קובץ'}), 400
-                # שמירת הקובץ בשרת (לצורך הפשטות נשמור בתיקייה מקומית)
-                upload_folder = 'static/profile_images'
-                if not os.path.exists(upload_folder):
-                    os.makedirs(upload_folder)
-                file_path = os.path.join(upload_folder, f'user_{user_id}_{file.filename}')
                 file.save(file_path)
-                # עדכון כתובת התמונה בבסיס הנתונים
-                profile_image_url = f'/{file_path}'
-                rows_affected = Users.update_profile_image(user_id, profile_image_url)
-                if rows_affected:
-                    return jsonify({'message': 'תמונת הפרופיל הועלתה בהצלחה', 'profile_image_url': profile_image_url}), 200
-                else:
-                    return jsonify({'message': 'משתמש לא נמצא'}), 404
-            except mysql.connector.Error as err:
-                return jsonify({'error': str(err)}), 500
+            except Exception as e:
+                print(f"[ERROR] שגיאה בשמירת קובץ חדש: {e}")
+                return jsonify({'error': f'שגיאה בשמירת קובץ: {e}'}), 500
+
+            # עדכן את כתובת התמונה במסד הנתונים
+            profile_image_url = f'profile_images_uploads/{filename}'
+            rows_affected = Users.update_profile_image(user_id, profile_image_url)
+            if rows_affected:
+                return jsonify({'message': 'תמונת הפרופיל הועלתה בהצלחה', 'profile_image_url': profile_image_url}), 200
+            else:
+                return jsonify({'message': 'משתמש לא נמצא'}), 404
+        except Exception as err:
+            print(f"[FATAL ERROR] {err}")
+            return jsonify({'error': str(err)}), 500

@@ -18,7 +18,9 @@ import os
 
 
 app = Flask(__name__)
-CORS(app, origins=['http://localhost:5173'])
+app.static_folder = 'profile_images_uploads'
+app.add_url_rule('/profile_images_uploads/<path:filename>', endpoint='profile_images_uploads', view_func=app.send_static_file)
+CORS(app)
 
 app.register_blueprint(role_bp)
 app.register_blueprint(user_bp)
@@ -40,20 +42,6 @@ IncomeSources.create_table()
 Incomes.create_table()
 BudgetSummary.create_table()
 
-@app.route('/users/<int:user_id>/profile-image')
-@cross_origin(origins=['http://localhost:5173'])
-def get_profile_image(user_id):
-    # לוגיקה למציאת שם הקובץ לפי user_id
-    return send_from_directory('profile_images', filename)
-
-@app.route('/profile_images/<filename>')
-@cross_origin(origins=['http://localhost:5173'])
-def serve_profile_image(filename):
-    # ודא שהתמונה קיימת
-    image_path = os.path.join('backend', 'profile_images', filename)
-    if not os.path.exists(image_path):
-        return {'error': 'Image not found'}, 404
-    return send_from_directory(os.path.join('backend', 'profile_images'), filename)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
