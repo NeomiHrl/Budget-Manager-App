@@ -13,6 +13,7 @@ from werkzeug.utils import secure_filename
 
 
 class UserController:
+            
         
     @staticmethod
     def change_password(user_id):
@@ -207,63 +208,57 @@ class UserController:
     @staticmethod
     def upload_profile_image(user_id):
         import os
+        from werkzeug.utils import secure_filename
         try:
-            print(f"[DEBUG] התחלת upload_profile_image עבור user_id={user_id}")
             if 'profile_image' not in request.files:
-                print("[ERROR] אין קובץ profile_image ב-request.files")
                 return jsonify({'message': 'אין קובץ תמונה'}), 400
             file = request.files['profile_image']
             if file.filename == '':
-                print("[ERROR] לא נבחר קובץ (filename ריק)")
                 return jsonify({'message': 'לא נבחר קובץ'}), 400
 
-            filename = secure_filename(file.filename)
-            print(f"[DEBUG] קובץ התקבל: {filename}")
-
-            # הגדר תיקיית התמונות
-            project_root = os.path.dirname(os.path.dirname(__file__)) 
-            upload_folder = os.path.join(project_root, 'profile_images_uploads')
-            os.makedirs(upload_folder, exist_ok=True)
-            print(f"[DEBUG] תיקיית העלאה: {upload_folder}")
+            # בדיקת סיומת
+            allowed_ext = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+            filename_orig = secure_filename(file.filename)
+            _, ext = os.path.splitext(filename_orig)
+            if ext.lower() not in allowed_ext:
+                return jsonify({'error': 'Invalid file type'}), 400
 
             # שם קובץ ייחודי לפי user_id
-            allowed_ext = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
-            _, ext = os.path.splitext(file.filename)
             filename = f'user_{user_id}{ext.lower()}'
+
+            # הגדר תיקיית התמונות
+            project_root = os.path.dirname(os.path.dirname(__file__))
+            upload_folder = os.path.join(project_root, 'profile_images_uploads')
+            os.makedirs(upload_folder, exist_ok=True)
             file_path = os.path.join(upload_folder, filename)
-            print(f"[DEBUG] נתיב לשמירה: {file_path}")
 
             # מחיקת תמונה ישנה אם קיימת
             user = Users.get_user_by_id(user_id)
-            print(f"[DEBUG] user={user}")
             if user:
-                old_image_url = user[6] if len(user) > 6 else None  # הנח שעמודה 6 היא profile_image_url
-                print(f"[DEBUG] old_image_url={old_image_url}")
+                old_image_url = user[6] if len(user) > 6 else None
                 if old_image_url:
-                    old_image_path = os.path.join(project_root, old_image_url.lstrip('/'))
-                    print(f"[DEBUG] old_image_path={old_image_path}")
+                    old_image_path = os.path.join(upload_folder, os.path.basename(old_image_url))
                     if os.path.exists(old_image_path):
                         try:
                             os.remove(old_image_path)
-                            print(f"[DEBUG] תמונה ישנה נמחקה: {old_image_path}")
                         except Exception as e:
                             print(f"[ERROR] שגיאה במחיקת תמונה ישנה: {e}")
 
             # שמור את הקובץ החדש
-            print(f"[DEBUG] שמירת קובץ חדש: {file_path}")
-            file.save(file_path)
+            try:
+                file.save(file_path)
+            except Exception as e:
+                print(f"[ERROR] שגיאה בשמירת קובץ חדש: {e}")
+                return jsonify({'error': f'שגיאה בשמירת קובץ: {e}'}), 500
 
             # עדכן את כתובת התמונה במסד הנתונים
             profile_image_url = f'profile_images_uploads/{filename}'
-            print(f"[DEBUG] עדכון profile_image_url במסד: {profile_image_url}")
             rows_affected = Users.update_profile_image(user_id, profile_image_url)
-            print(f"[DEBUG] user_id: {user_id}, rows_affected: {rows_affected}, profile_image_url: {profile_image_url}")
+            print(rows_affected )
             if rows_affected:
-                print(f"[SUCCESS] תמונת הפרופיל הועלתה בהצלחה")
                 return jsonify({'message': 'תמונת הפרופיל הועלתה בהצלחה', 'profile_image_url': profile_image_url}), 200
             else:
-                print(f"[ERROR] משתמש לא נמצא (user_id={user_id})")
-                return jsonify({'message': f'משתמש לא נמצא (user_id={user_id})'}), 404
+                return jsonify({'message': 'משתמש לא נמצא'}), 404
         except Exception as err:
             print(f"[FATAL ERROR] {err}")
             return jsonify({'error': str(err)}), 500
@@ -335,6 +330,7 @@ class UserController:
     @staticmethod
     def upload_profile_image(user_id):
         import os
+        from werkzeug.utils import secure_filename
         try:
             if 'profile_image' not in request.files:
                 return jsonify({'message': 'אין קובץ תמונה'}), 400
@@ -342,20 +338,25 @@ class UserController:
             if file.filename == '':
                 return jsonify({'message': 'לא נבחר קובץ'}), 400
 
+            allowed_ext = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+            orig_filename = secure_filename(file.filename)
+            _, ext = os.path.splitext(orig_filename)
+            if ext.lower() not in allowed_ext:
+                return jsonify({'error': 'Invalid file type'}), 400
+
+            # קבע שם קובץ לפי user_id
+            filename = f"user_{user_id}{ext}"
+
             # הגדר תיקיית התמונות
-            project_root = os.path.dirname(os.path.dirname(__file__)) 
+            project_root = os.path.dirname(os.path.dirname(__file__))
             upload_folder = os.path.join(project_root, 'profile_images_uploads')
             os.makedirs(upload_folder, exist_ok=True)
-
-            # שם קובץ ייחודי לפי user_id
-            _, ext = os.path.splitext(file.filename)
-            filename = f'user_{user_id}{ext.lower()}'
-            file_path = os.path.join(upload_folder, filename)
+            save_path = os.path.join(upload_folder, filename)
 
             # מחיקת תמונה ישנה אם קיימת
             user = Users.get_user_by_id(user_id)
             if user:
-                old_image_url = user[6] if len(user) > 6 else None  # הנח שעמודה 6 היא profile_image_url
+                old_image_url = user[6] if len(user) > 6 else None  
                 if old_image_url:
                     old_image_path = os.path.join(project_root, old_image_url.lstrip('/'))
                     if os.path.exists(old_image_path):
@@ -366,7 +367,7 @@ class UserController:
 
             # שמור את הקובץ החדש
             try:
-                file.save(file_path)
+                file.save(save_path)
             except Exception as e:
                 print(f"[ERROR] שגיאה בשמירת קובץ חדש: {e}")
                 return jsonify({'error': f'שגיאה בשמירת קובץ: {e}'}), 500
@@ -374,10 +375,30 @@ class UserController:
             # עדכן את כתובת התמונה במסד הנתונים
             profile_image_url = f'profile_images_uploads/{filename}'
             rows_affected = Users.update_profile_image(user_id, profile_image_url)
-            if rows_affected:
+            if user:
                 return jsonify({'message': 'תמונת הפרופיל הועלתה בהצלחה', 'profile_image_url': profile_image_url}), 200
             else:
                 return jsonify({'message': 'משתמש לא נמצא'}), 404
         except Exception as err:
             print(f"[FATAL ERROR] {err}")
             return jsonify({'error': str(err)}), 500
+
+    @staticmethod
+    def delete_profile_image(user_id):
+                try:
+                    user = Users.get_user_by_id(user_id)
+                    if not user:
+                        return jsonify({'message': 'משתמש לא נמצא'}), 404
+                    # בדוק אם יש תמונה קיימת
+                    profile_image_url = user[6] if len(user) > 6 else None
+                    if profile_image_url:
+                        filename = os.path.basename(profile_image_url)
+                        project_root = os.path.dirname(os.path.dirname(__file__))
+                        image_path = os.path.join(project_root, 'profile_images_uploads', filename)
+                        if os.path.exists(image_path):
+                            os.remove(image_path)
+                    # עדכן את השדה במסד ל-NULL
+                    Users.update_profile_image(user_id, None)
+                    return jsonify({'message': 'תמונת הפרופיל נמחקה'}), 200
+                except Exception as e:
+                    return jsonify({'error': str(e)}), 500

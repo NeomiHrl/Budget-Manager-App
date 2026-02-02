@@ -7,10 +7,14 @@ from werkzeug.security import generate_password_hash
         
 class Users:
     @staticmethod
-    def profile_image_exists(filename):
-        image_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'profile_images_uploads')
-        file_path = os.path.join(image_folder, filename)
-        return os.path.exists(file_path)
+    def get_db_connection():
+        return mysql.connector.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            database=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD
+        )
        
     @staticmethod
     def reset_all_passwords_to_default(default_password="1234"):
@@ -31,16 +35,7 @@ class Users:
             connection.commit()
             cursor.close()
     
-    @staticmethod
-    def get_db_connection():
-        return mysql.connector.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            database=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD
-        )
-
+    
     @staticmethod
     def create_table():
         with Users.get_db_connection() as connection:
@@ -52,6 +47,7 @@ class Users:
                     email VARCHAR(100) NOT NULL,
                     password VARCHAR(100) NOT NULL,
                     role_id INT NOT NULL,
+                    profile_image_url VARCHAR(255),
                     FOREIGN KEY (role_id) REFERENCES roles(role_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'''
             cursor.execute(sql)
@@ -77,8 +73,6 @@ class Users:
                 "email": email,
                 "profile_image_url": profile_image_url
             }
-
-
 
     @staticmethod
     def get_all_users():
@@ -159,3 +153,10 @@ class Users:
                 rows_affected = cursor.rowcount
                 cursor.close()
                 return rows_affected
+
+
+    @staticmethod
+    def profile_image_exists(filename):
+        image_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'profile_images_uploads')
+        file_path = os.path.join(image_folder, filename)
+        return os.path.exists(file_path)

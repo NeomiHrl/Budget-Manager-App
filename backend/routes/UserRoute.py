@@ -61,3 +61,6 @@ from flask_cors import cross_origin
 def upload_profile_image(user_id):
     return UserController.upload_profile_image(user_id)
 
+@user_bp.route('/users/<int:user_id>/profile-image', methods=['PUT'])
+def delete_profile_image(user_id):
+    return UserController.delete_profile_image(user_id)

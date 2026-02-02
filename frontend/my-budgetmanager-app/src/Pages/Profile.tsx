@@ -1,16 +1,107 @@
 import React, { useState, useEffect } from 'react';
 import { changePassword, updateUser, uploadProfileImage, getUserById,getProfileImageUrl } from '../Api/ApiUser';
 import { useUser } from '../Contexts/UserContext';
-import { FaUserCircle, FaEnvelope, FaEdit, FaSave, FaBell } from 'react-icons/fa';
+import { FaUserCircle, FaTrash, FaEnvelope, FaEdit, FaSave, FaBell, FaSearchPlus } from 'react-icons/fa';
+// DropZone component for drag-and-drop upload
+function DropZone({ onDrop }: { onDrop: (file: File) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragActive, setDragActive] = useState(false);
+
+  const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true);
+    else if (e.type === 'dragleave') setDragActive(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      onDrop(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleClick = () => {
+    inputRef.current?.click();
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      onDrop(e.target.files[0]);
+    }
+  };
+
+  return (
+    <div
+      onClick={handleClick}
+      onDragEnter={handleDrag}
+      onDragLeave={handleDrag}
+      onDragOver={handleDrag}
+      onDrop={handleDrop}
+      style={{
+        width: 260,
+        height: 260,
+        borderRadius: '50%',
+        background: dragActive ? '#e9e3f7' : '#f3f3f3',
+        border: dragActive ? '3px solid #7b2ff7' : '3px dashed #bbb',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        cursor: 'pointer',
+        marginBottom: 18,
+        color: '#7b2ff7',
+        fontWeight: 700,
+        fontSize: 20,
+        position: 'relative',
+        transition: 'border 0.2s, background 0.2s',
+      }}
+      tabIndex={0}
+      aria-label="גרור או העלה תמונה"
+    >
+      <span style={{textAlign: 'center', color: '#7b2ff7', fontWeight: 700, fontSize: 20}}>גרור/העלה תמונה</span>
+      <input
+        type="file"
+        accept="image/*"
+        ref={inputRef}
+        style={{display: 'none'}}
+        onChange={handleChange}
+      />
+    </div>
+  );
+}
+import NotificationCard from '../Components/NotificationCard';
 import { useRef } from 'react';
 
 export default function Profile() {
   const { user, setUser } = useUser();
-    const [firstName, setFirstName] = useState(user?.first_name || '');
-    const [lastName, setLastName] = useState(user?.last_name || '');
-    const [email, setEmail] = useState(user?.email || '');
-    const [profileImage, setProfileImage] = useState(user?.profile_image_url || '');
-    const [imageVersion, setImageVersion] = useState(Date.now());
+  const [firstName, setFirstName] = useState(user?.first_name || '');
+  const [lastName, setLastName] = useState(user?.last_name || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [profileImage, setProfileImage] = useState(user?.profile_image_url || '');
+  const [imageVersion, setImageVersion] = useState(Date.now());
+  const [deleting, setDeleting] = useState(false);
+  const [notification, setNotification] = useState<{ message: string, type?: 'success' | 'error' | 'info' } | null>(null);
+
+  // מחיקת תמונת פרופיל
+  const handleDeleteImage = async () => {
+    if (!profileImage) return;
+    setDeleting(true);
+    setNotification(null);
+    try {
+      await import('../Api/ApiUser').then(({ deleteProfileImage }) => deleteProfileImage(user.user_id));
+      setProfileImage('');
+      setUser && setUser({ ...user, profile_image_url: '' });
+      setShowImageModal(false);
+      setNotification({ message: 'תמונת הפרופיל נמחקה בהצלחה', type: 'success' });
+    } catch (err: any) {
+      setNotification({ message: err.message || 'שגיאה במחיקת תמונה', type: 'error' });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
     // טען נתוני משתמש עדכניים מהשרת בכל כניסה לדף
     useEffect(() => {
@@ -32,14 +123,10 @@ export default function Profile() {
       // eslint-disable-next-line
     }, []);
   const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPasswordFields, setShowPasswordFields] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [cancelMsg, setCancelMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isHovering, setIsHovering] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -48,18 +135,16 @@ export default function Profile() {
   // העלאת תמונה (תמיד משתמשים ב-uploadProfileImage)
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
-    setUploadError(null);
+    setNotification(null);
     setUploading(true);
     try {
       const res = await uploadProfileImage(user.user_id, fileInputRef.current!.files![0]);
-      setMessage(user.profile_image_url ? 'תמונת הפרופיל עודכנה בהצלחה!' : 'תמונת הפרופיל הועלתה בהצלחה!');
+      setNotification({ message: user.profile_image_url ? 'תמונת הפרופיל עודכנה בהצלחה!' : 'תמונת הפרופיל הועלתה בהצלחה!', type: 'success' });
       setProfileImage(res.profile_image_url);
       setImageVersion(Date.now());
       setUser && setUser({ ...user, profile_image_url: res.profile_image_url });
-      setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
-      setUploadError(err.message || 'שגיאה בהעלאת תמונה');
-      setTimeout(() => setUploadError(null), 3000);
+      setNotification({ message: err.message || 'שגיאה בהעלאת תמונה', type: 'error' });
     } finally {
       setUploading(false);
     }
@@ -67,11 +152,9 @@ export default function Profile() {
 
   // שמירה מתוך המודאל
   const handleSave = async () => {
-    setMessage(null);
-    setError(null);
+    setNotification(null);
     if (!firstName || !lastName || !email) {
-      setError('יש למלא את כל השדות');
-      setTimeout(() => setError(null), 3000);
+      setNotification({ message: 'יש למלא את כל השדות', type: 'error' });
       return;
     }
     try {
@@ -86,18 +169,16 @@ export default function Profile() {
       // שינוי סיסמה אם נבחר
       if (showPasswordFields && oldPassword && newPassword) {
         await changePassword(user.user_id, oldPassword, newPassword);
-        setMessage('הפרטים והסיסמה נשמרו בהצלחה!');
+        setNotification({ message: 'הפרטים והסיסמה נשמרו בהצלחה!', type: 'success' });
       } else {
-        setMessage('הפרטים נשמרו בהצלחה!');
+        setNotification({ message: 'הפרטים נשמרו בהצלחה!', type: 'success' });
       }
       setShowEditModal(false);
       setShowPasswordFields(false);
       setOldPassword('');
       setNewPassword('');
-      setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
-      setError(err.message || 'שגיאה בעדכון הפרטים');
-      setTimeout(() => setError(null), 3000);
+      setNotification({ message: err.message || 'שגיאה בעדכון הפרטים', type: 'error' });
     }
   };
 
@@ -105,7 +186,6 @@ export default function Profile() {
   const handleEditClick = () => {
     setShowEditModal(true);
     setShowPasswordFields(false);
-    setCancelMsg(null);
   };
 
   // ביטול עריכה
@@ -114,13 +194,11 @@ export default function Profile() {
     setFirstName(user.first_name);
     setLastName(user.last_name);
     setEmail(user.email);
-    setError(null);
-    setMessage(null);
+    setNotification(null);
     setOldPassword('');
     setNewPassword('');
     setShowPasswordFields(false);
-    setCancelMsg('השינויים בוטלו ולא נשמרו');
-    setTimeout(() => setCancelMsg(null), 3000);
+    setNotification({ message: 'השינויים בוטלו ולא נשמרו', type: 'info' });
   };
 
   return (
@@ -142,33 +220,6 @@ export default function Profile() {
           ) : (
             <FaUserCircle size={84} color="#7b2ff7" style={{cursor: 'pointer'}} onClick={() => setShowImageModal(true)} />
           )}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current && fileInputRef.current.click()}
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              right: 0,
-              background: isHovering ? '#f357a8' : '#fff',
-              color: isHovering ? '#fff' : '#7b2ff7',
-              border: '2px solid #7b2ff7',
-              borderRadius: '50%',
-              width: 32,
-              height: 32,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px #e9e3f7',
-              transition: 'background 0.2s, color 0.2s',
-            }}
-            title={user.profile_image_url ? 'החלף תמונה' : 'העלה תמונה'}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 17C14.7614 17 17 14.7614 17 12C17 9.23858 14.7614 7 12 7C9.23858 7 7 9.23858 7 12C7 14.7614 9.23858 17 12 17Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M19 21V19C19 17.8954 18.1046 17 17 17H7C5.89543 17 5 17.8954 5 19V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
           <input
             type="file"
             accept="image/*"
@@ -180,36 +231,65 @@ export default function Profile() {
               {/* מודאל תמונה מוגדלת */}
               {showImageModal && (
                 <div style={{position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center'}} onClick={() => setShowImageModal(false)}>
-                  <div style={{position: 'relative', background: '#fff', borderRadius: 18, padding: 24, boxShadow: '0 2px 16px #e9e3f7', display: 'flex', flexDirection: 'column', alignItems: 'center'}} onClick={e => e.stopPropagation()}>
-                    <img
-                      src={getProfileImageUrl(profileImage) + `?v=${imageVersion}`}
-                      alt="profile-large"
-                      style={{width: 260, height: 260, borderRadius: '50%', objectFit: 'cover', border: '3px solid #7b2ff7', marginBottom: 18}}
-                    />
-                    <FaEdit
-                      onClick={() => { setShowImageModal(false); fileInputRef.current && fileInputRef.current.click(); }}
-                      style={{
-                        position: 'absolute',
-                        bottom: 36,
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        background: '#fff',
-                        color: '#7b2ff7',
-                        border: '2px solid #7b2ff7',
-                        borderRadius: '50%',
-                        width: 48,
-                        height: 48,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        boxShadow: '0 2px 8px #e9e3f7',
-                        fontSize: 28,
-                        padding: 10
-                      }}
-                      title="החלף תמונה"
-                    />
-                  
+                  <div style={{position: 'relative', background: '#fff', borderRadius: 18, padding: 24, boxShadow: '0 2px 16px #e9e3f7', display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 320}} onClick={e => e.stopPropagation()}>
+                    {/* איקס לסגירה */}
+                    <button onClick={() => setShowImageModal(false)} style={{position: 'absolute', top: 10, left: 10, background: 'transparent', border: 'none', fontSize: 28, color: '#7b2ff7', cursor: 'pointer', zIndex: 2}} title="סגור">×</button>
+                    {profileImage ? (
+                      <div style={{position: 'relative', width: 260, height: 260, marginBottom: 18}}>
+                        <img
+                          src={getProfileImageUrl(profileImage) + `?v=${imageVersion}`}
+                          alt={user?.first_name ? `תמונת פרופיל של ${user.first_name}` : 'תמונת פרופיל' }
+                          style={{width: 260, height: 260, borderRadius: '50%', objectFit: 'cover', border: '3px solid #7b2ff7'}}
+                        />
+                        {/* זכוכית מגדלת */}
+                        <button
+                          style={{position: 'absolute', bottom: 10, right: 10, background: '#fff', border: '2px solid #7b2ff7', borderRadius: '50%', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 3, boxShadow: '0 2px 8px #e9e3f7'}}
+                          title="הגדל תמונה"
+                          onClick={() => window.open(getProfileImageUrl(profileImage) + `?v=${imageVersion}`, '_blank')}
+                        >
+                          <FaSearchPlus size={22} color="#7b2ff7" />
+                        </button>
+                      </div>
+                    ) : (
+                      <DropZone onDrop={async (file) => {
+                        setUploading(true);
+                        setNotification(null);
+                        try {
+                          const res = await uploadProfileImage(user.user_id, file);
+                          setNotification({ message: 'תמונת הפרופיל הועלתה בהצלחה!', type: 'success' });
+                          setProfileImage(res.profile_image_url);
+                          setImageVersion(Date.now());
+                          setUser && setUser({ ...user, profile_image_url: res.profile_image_url });
+                          setShowImageModal(false);
+                        } catch (err: any) {
+                          setNotification({ message: err.message || 'שגיאה בהעלאת תמונה', type: 'error' });
+                        } finally {
+                          setUploading(false);
+                        }
+                      }} />
+                    )}
+                    {profileImage && (
+                      <div style={{display: 'flex', gap: 16, marginTop: 10}}>
+                        {/* כפתור עריכה */}
+                        <button
+                          onClick={() => { setShowImageModal(false); fileInputRef.current && fileInputRef.current.click(); }}
+                          style={{background: '#fff', color: '#7b2ff7', border: '2px solid #7b2ff7', borderRadius: 8, padding: '8px 18px', fontWeight: 700, cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', gap: 8}}
+                          title="החלף תמונה"
+                          disabled={uploading}
+                        >
+                          <FaEdit /> ערוך
+                        </button>
+                        {/* כפתור מחיקה */}
+                        <button
+                          onClick={handleDeleteImage}
+                          style={{background: '#fff', color: '#c00', border: '2px solid #c00', borderRadius: 8, padding: '8px 18px', fontWeight: 700, cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', gap: 8}}
+                          title="מחק תמונה"
+                          disabled={deleting}
+                        >
+                          <FaTrash style={{marginLeft: 6}} /> {deleting ? 'מוחק...' : 'מחק'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -219,8 +299,6 @@ export default function Profile() {
             {user.profile_image_url ? 'החלף תמונת פרופיל' : 'העלה תמונת פרופיל'}
           </div>
         )}
-        {uploading && <div style={{color: '#7b2ff7', fontWeight: 700, fontSize: 15, marginBottom: 8}}>מעלה תמונה...</div>}
-        {uploadError && <div style={{color: '#c00', fontWeight: 700, fontSize: 15, marginBottom: 8}}>{uploadError}</div>}
         <div style={{fontSize: 26, fontWeight: 800, color: '#7b2ff7'}}>
           {firstName} {lastName}
         </div>
@@ -288,29 +366,27 @@ export default function Profile() {
               </button>
             </div>
             {/* הודעות בתוך המודאל */}
-            {message && (
-              <div style={{background: '#d4f7e3', borderRadius: 12, padding: 10, color: '#1a7f4d', fontWeight: 700, fontSize: 15, marginBottom: 8}}>{message}</div>
-            )}
-            {error && (
-              <div style={{background: '#ffe3e3', borderRadius: 12, padding: 10, color: '#c00', fontWeight: 700, fontSize: 15, marginBottom: 8}}>{error}</div>
+            {/* הודעות בתוך המודאל */}
+            {notification && (
+              <NotificationCard
+                message={notification.message}
+                type={notification.type}
+                onClose={() => setNotification(null)}
+                duration={4000}
+              />
             )}
           </div>
         </div>
       )}
 
-      {/* הודעת ביטול מעוצבת */}
-      {cancelMsg && (
-        <div style={{background: '#ffe3e3', borderRadius: 12, padding: 14, color: '#c00', fontWeight: 700, fontSize: 16, marginBottom: 8, marginTop: 8}}>
-          {cancelMsg}
-        </div>
-      )}
-
-      {/* הודעות מערכת */}
-      {message && !showEditModal && (
-        <div style={{background: '#d4f7e3', borderRadius: 12, padding: 14, color: '#1a7f4d', fontWeight: 700, fontSize: 16, marginBottom: 8}}>{message}</div>
-      )}
-      {error && !showEditModal && (
-        <div style={{background: '#ffe3e3', borderRadius: 12, padding: 14, color: '#c00', fontWeight: 700, fontSize: 16, marginBottom: 8}}>{error}</div>
+      {/* הודעות מערכת מעוצבות */}
+      {notification && !showEditModal && (
+        <NotificationCard
+          message={notification.message}
+          type={notification.type}
+          onClose={() => setNotification(null)}
+          duration={4000}
+        />
       )}
       <div style={{background: '#e9e3f7', borderRadius: 12, padding: 14, color: '#7b2ff7', fontWeight: 700, fontSize: 16, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8}}>
         <FaBell style={{fontSize: 22}} />

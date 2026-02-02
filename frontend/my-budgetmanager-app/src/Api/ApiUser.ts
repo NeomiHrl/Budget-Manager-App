@@ -163,16 +163,37 @@ export const uploadProfileImage = async (userId: number, file: File) => {
     const formData = new FormData();
     formData.append('profile_image', file);
     console.log('Uploading file:', file);
-    const response = await fetch(`${API_URL}/users/${userId}/upload-profile-image`, {
-        method: 'POST',
+        const response = await fetch(`${API_URL}/users/${userId}/upload-profile-image`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+        let data;
+        try {
+            data = await response.json();
+        } catch (e) {
+            data = {};
+        }
+        if (!response.ok) throw new Error(data.message || data.error || 'Failed to upload image');
+        return data;
+    }
+   
+
+export const deleteProfileImage = async (userId: number) => {
+    const token = getToken();
+    const response = await fetch(`${API_URL}/users/${userId}/profile-image`, {
+        method: 'PUT',
         headers: {
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
         },
-        body: formData
+        body: JSON.stringify({ profile_image: '' }),
     });
-    if (!response.ok) throw new Error('Failed to upload image');
+    if (!response.ok) throw new Error('Failed to delete profile image');
     return await response.json();
-   }
+}   
 
 
 export const getProfileImageUrl = (imageName: string) =>

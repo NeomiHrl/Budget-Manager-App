@@ -21,7 +21,6 @@ export default function Overview() {
     const [selectedMonth, setSelectedMonth] = useState(currentMonth);
     const [selectedYear, setSelectedYear] = useState(currentYear);
     const { user } = useUser();
-    // הצג הודעת ברכה רק בפעם הראשונה שהמשתמש נכנס
     const [showWelcome, setShowWelcome] = useState(() => {
         const shown = localStorage.getItem('welcomeShown');
         return !shown;
@@ -157,7 +156,10 @@ export default function Overview() {
                                 gap: 10,
                                 animation: 'bounceBtn 1.2s infinite alternate',
                             }}
-                            onClick={() => setShowWelcome(false)}
+                            onClick={() => {
+                                setShowWelcome(false);
+                                localStorage.setItem('welcomeShown', 'true');
+                            }}
                         >
                             לניהול הפיננסי שלי
                             <span style={{fontSize: 22, marginLeft: 4, animation: 'pointDown 1.2s infinite alternate'}}>👇</span>
